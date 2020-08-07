@@ -1,0 +1,130 @@
+library(shiny)
+
+
+library(Lahman)
+
+Teams <- Teams %>% filter(yearID > 1900, lgID != "FL")
+
+
+tlist <- Teams$name
+
+lglist <- unique(Teams$lgID)
+
+
+# Define UI for application that draws a histogram
+ui <- shinyUI(pageWithSidebar(
+    
+    # Application title
+    headerPanel("Offensive Production in Baseball History"),
+    
+    # Sidebar with controls to select the variable to plot against year
+    # also choose plotting and smooth colors, range of years, and smoothing width
+    sidebarPanel(
+        selectInput("team_name", "Team Name:", choices = tlist),
+        selectInput("league", "League Initials:", choices = lglist),
+        selectInput("variable", "Variable:",
+                    c("Runs" = "R",
+                      "Hits" = "H",
+                      "Home Runs" = "HR",
+                      "Doubles" = "X2B",
+                      "Triples" = "X3B",
+                      "Walks" = "BB",
+                      "Strikeouts" = "SO",
+                      "Stolen Bases" = "SB",
+                      "Errors" = "E")),
+        selectInput("pcolor", "Points Color:",
+                    c("Blue" = "blue", "Red" = "red", "Green" = "green",
+                      "Orange" = "orange", "Black" = "black", "Yellow" = "yellow")),
+        selectInput("scolor", "Smooth Color:",
+                    c("Red" = "red", "Blue" = "blue", "Green" = "green",
+                      "Orange" = "orange", "Black" = "black", "Yellow" = "yellow")),
+        sliderInput("salpha", "Alpha:",
+                    min = 0, max = 1, 
+                    value = 0.5, step = 0.05),
+        sliderInput("range", "Range:",
+                    min = 1901, max = 2016, sep = "",
+                    value = c(1901, 2016), step = 1),
+        sliderInput("decimal", "Loess Smoothing Fraction:",
+                    min = 0.05, max = 0.95, value = 0.2, step= 0.05)
+    ),
+    
+    # Show the caption and plot of the requested variable against stat
+    mainPanel(
+        h3(textOutput("caption")),
+        plotOutput("myPlot"),
+        h3(textOutput("caption2")),
+        plotOutput("myPlot2")
+    )
+))
+
+library(Lahman)
+library(ggplot2)
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+    
+    # Compute the forumla text in a reactive function since it is 
+    # shared by the output$caption and output$myPlot functions
+    formulaText <- reactive({
+        paste("Team Name",input$team_name, "Variable:", input$variable,
+              "Per Game Per Team:",
+              input$range[1], "to", input$range[2])
+    })
+    
+    # Return the formula text for printing as a caption
+    output$caption <- renderText({
+        formulaText()
+    })
+    
+    formulaText2 <- reactive({
+        paste("League Initials",input$league, "Variable:", input$variable,
+              "Per Game Per League:", input$range[1], "to", input$range[2])
+    })
+    
+    
+    
+    # Return the formula text for printing as a caption
+    output$caption2 <- renderText({
+        formulaText2()
+    })
+
+    # Generate a plot of the requested variable against time and only 
+    # include outliers if requested
+    output$myPlot <- renderPlot({
+        # team_selection <- input$team_name
+        Teams_recent <- subset(Teams, yearID >= input$range[1] &
+                                   yearID <= input$range[2])
+        Teams_recent_select <- subset(Teams_recent, name == input$team_name)
+        
+        # Teams_recent <- Teams_recent[[input$team_name,]]
+        Teams_recent_select$stat.game <- Teams_recent_select[, input$variable] / Teams_recent_select[, "G"]
+
+        print(ggplot(Teams_recent_select, aes(yearID, stat.game)) + 
+                  geom_point(color = input$pcolor, alpha = input$salpha) +
+                  geom_smooth(size=2, color=input$scolor, method="loess", 
+                              span=input$decimal) + 
+                  xlab("YEAR") + ylab("RATE PER GAME PER TEAM") +
+                  theme(text = element_text(size=20))
+        )
+    }, width=600, height=400)
+    
+    output$myPlot2 <- renderPlot({
+        # team_selection <- input$team_name
+        League_select <- subset(Teams, lgID == input$league)
+        # Teams_recent <- Teams_recent[[input$team_name,]]
+        League_select$stat.games <- League_select[, input$variable] / League_select[, "G"]
+        
+        print(ggplot(League_select, aes(yearID, stat.games)) + 
+                  geom_point(color = input$pcolor, alpha = input$salpha) +
+                  geom_smooth(size=2, color=input$scolor, method="loess", 
+                              span=input$decimal) + 
+                  xlab("YEAR") + ylab("RATE PER GAME PER TEAM") +
+                  theme(text = element_text(size=20))
+        )
+    }, width=600, height=400)
+}
+
+# Teams[["Chicago White Stalkings", ]]
+
+# Run the application 
+shinyApp(ui = ui, server = server)
